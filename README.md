@@ -1,93 +1,136 @@
-# golang-web-app
 
+# Golang Web Application
 
+This project is a Golang HTTP server built using the GoFiber framework. The main goal is to implement `auth` and `user` modules. The entities within these modules should be stored in a local `.db` file using the `tidwall/buntdb` library.
 
-## Getting started
+## Validation
+All request bodies or parameters must be validated using a validator. The validation rules are up to the developer's discretion.
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+## Code Structure
+All features and package utilization should be encapsulated and use abstraction to separate business logic.
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+## Auth Module
+The `auth` module will handle all endpoints related to user authentication. It will use JWT tokens for user authentication. The encryption method to be used is `SHA256` with a TTL of 10 minutes. Additionally, a refresh token mechanism must be implemented to issue new access tokens if the current token expires. When the JWT token expires, a new `AccessToken` and `RefreshToken` should be issued using the refresh token.
 
-## Add your files
+### Endpoints
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+#### 1. Register [POST] `/auth/register`
+Registers a new user with the following request parameters:
 
+**Request**:
+```json
+{
+  "username": "<username of the user>",
+  "email": "<email of the user>",
+  "password": "<password of the user>",
+  "name": "<name of the user>",
+  "lastname": "<lastname of the user>"
+}
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/rapsodoinc/tr/architecture/golang-web-app.git
-git branch -M main
-git push -uf origin main
+
+**Response**:
+```json
+{
+  "username": "<username of the user>",
+  "email": "<email of the user>",
+  "name": "<name of the user>",
+  "lastname": "<lastname of the user>",
+  "access_token": "<access token of the user (10 min TTL)>",
+  "refresh_token": "<refresh token of the user>"
+}
 ```
 
-## Integrate with your tools
+#### 2. Login [POST] `/auth/login`
+Authenticates a user using their `username` or `email` along with the password.
 
-- [ ] [Set up project integrations](https://gitlab.com/rapsodoinc/tr/architecture/golang-web-app/-/settings/integrations)
+**Request**:
+```json
+{
+  "identifier": "<username or email of the user>",
+  "password": "<password of the user>"
+}
+```
 
-## Collaborate with your team
+**Response**:
+```json
+{
+  "username": "<username of the user>",
+  "email": "<email of the user>",
+  "name": "<name of the user>",
+  "lastname": "<lastname of the user>",
+  "access_token": "<access token of the user (10 min TTL)>",
+  "refresh_token": "<refresh token of the user>"
+}
+```
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+#### 3. Logout [POST] `/auth/logout`
+Logs out the user and deletes the refresh token associated with the session.
 
-## Test and Deploy
+**Request**:
+- The access token is sent in the header for user identification.
 
-Use the built-in continuous integration in GitLab.
+#### 4. Refresh [POST] `/auth/refresh`
+Issues a new `AccessToken` and `RefreshToken` using the refresh token.
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+**Request**:
+```json
+{
+  "identifier": "<identifier of the user [email or username]>",
+  "refresh_token": "<refresh token of the user>"
+}
+```
 
-***
+**Response**:
+```json
+{
+  "username": "<username of the user>",
+  "email": "<email of the user>",
+  "name": "<name of the user>",
+  "lastname": "<lastname of the user>",
+  "access_token": "<access token of the user (10 min TTL)>",
+  "refresh_token": "<refresh token of the user>"
+}
+```
 
-# Editing this README
+## User Module
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+### Endpoints
 
-## Suggestions for a good README
+#### 1. GetProfile [GET] `/user/profile`
+Retrieves the profile details of the user.
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+**Response**:
+```json
+{
+  "username": "<username of the user>",
+  "timezone": "<location of the user e.g., Europe/Istanbul>",
+  "language": "<language of the user e.g., TR | EN>",
+  "sport_branches": ["<Sport branches of the user>", "This is an array"]
+}
+```
 
-## Name
-Choose a self-explaining name for your project.
+#### 2. UpdateProfile [PATCH] `/user/profile`
+Updates the user's profile details. **Note:** This is a PATCH method, so the handler logic should fit the requirements of a PATCH operation.
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+**Request**:
+```json
+{
+  "username": "<username of the user>",
+  "timezone": "<location of the user e.g., Europe/Istanbul>",
+  "language": "<language of the user e.g., TR | EN>",
+  "sport_branches": ["<Sport branches of the user>", "This is an array"]
+}
+```
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+**Response**:
+```json
+{
+  "username": "<username of the user>",
+  "timezone": "<location of the user e.g., Europe/Istanbul>",
+  "language": "<language of the user e.g., TR | EN>",
+  "sport_branches": ["<Sport branches of the user>", "This is an array"]
+}
+```
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+#### 3. Delete [DELETE] `/user`
+Deletes the current user from the local database.
