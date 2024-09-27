@@ -4,6 +4,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/handlers"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/repository/local"
+	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/validator"
 	"go.uber.org/zap"
 	"os"
 )
@@ -19,6 +20,9 @@ func main() {
 		log.Fatal("Error creating brand-new bunt local repository", zap.String("local_db_path_env_variable", localDbPath), zap.Error(err))
 	}
 
+	// Initialize validator
+	validate := validator.NewValidator()
+
 	// Initialize fiber app
 	app := fiber.New(fiber.Config{
 		AppName: "Golang Web Application",
@@ -30,7 +34,7 @@ func main() {
 	})
 
 	// Initialize auth-handler
-	authHandler := handlers.NewAuth(log, localRepo)
+	authHandler := handlers.NewAuth(log, localRepo, validate)
 	authHandler.AssignEndpoints("auth", app)
 
 	// Start listening a port to be able to serve the http server

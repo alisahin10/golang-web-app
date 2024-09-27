@@ -3,18 +3,21 @@ package handlers
 import (
 	"github.com/gofiber/fiber/v2"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/repository/local"
+	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/validator"
 	"go.uber.org/zap"
 )
 
 type auth struct {
-	log  *zap.Logger
-	repo local.Repository
+	log      *zap.Logger
+	repo     local.Repository
+	validate validator.Validate
 }
 
-func NewAuth(log *zap.Logger, repo local.Repository) Handler {
+func NewAuth(log *zap.Logger, repo local.Repository, validate validator.Validate) Handler {
 	return &auth{
-		log:  log,
-		repo: repo,
+		log:      log,
+		repo:     repo,
+		validate: validate,
 	}
 }
 
