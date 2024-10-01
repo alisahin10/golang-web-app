@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/tidwall/buntdb"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/model"
+	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/utils"
 )
 
 type BuntImpl struct {
@@ -79,6 +80,52 @@ func (repo *BuntImpl) FindAll() ([]*model.User, error) {
 	return users, nil
 }
 
+func (repo *BuntImpl) UpdateOneByID(userID string, updateData *model.User) error {
+	// Get current user from database.
+	user, err := repo.FindOneByID(userID)
+	if err != nil {
+		return err
+	}
+
+	// Checking the desired update area.
+	if updateData.Email != "" {
+		user.Email = updateData.Email
+	}
+	if updateData.Name != "" {
+		user.Name = updateData.Name
+	}
+	if updateData.Lastname != "" {
+		user.Lastname = updateData.Lastname
+	}
+	if updateData.Age != 0 {
+		user.Age = updateData.Age
+	}
+
+	// Hashing the password if it's changed.
+	if updateData.Password != "" {
+		hashedPassword, err := utils.HashPassword(updateData.Password)
+		if err != nil {
+			return fmt.Errorf("password hash error: %v", err)
+		}
+		user.Password = hashedPassword
+	}
+
+	// Updating the user data to JSON
+	userJSON, err := json.Marshal(user)
+	if err != nil {
+		return fmt.Errorf("update user data JSON error: %v", err)
+	}
+
+	// Save it to the database
+	err = repo.DB.Update(func(tx *buntdb.Tx) error {
+		_, _, err := tx.Set(fmt.Sprintf("user:%s", userID), string(userJSON), nil)
+		return err
+	})
+
+	return err
+}
+
+/*
 func (repo *BuntImpl) UpdateOneByID(userID, email, name, lastname string, age int) error {
 	// Fetch the existing user
 	user, err := repo.FindOneByID(userID)
@@ -99,6 +146,7 @@ func (repo *BuntImpl) UpdateOneByID(userID, email, name, lastname string, age in
 	})
 	return err
 }
+*/
 
 func (repo *BuntImpl) DeleteOneByID(userID string) error {
 	// Delete the user by ID

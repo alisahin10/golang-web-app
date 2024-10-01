@@ -65,7 +65,7 @@ func (h *auth) registerEndpoint(c *fiber.Ctx) error {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "could not create user"})
 	}
 
-	// JWT Token'ları oluştur
+	// Create JWT token.
 	accessToken, refreshToken, err := utils.GenerateTokens(user.Username, user.Email)
 	if err != nil {
 		h.log.Error("Failed to generate tokens", zap.Error(err))

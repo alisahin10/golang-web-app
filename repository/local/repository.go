@@ -9,7 +9,7 @@ type Repository interface {
 	Create(user *model.User) error
 	FindOneByID(userID string) (*model.User, error)
 	FindAll() ([]*model.User, error)
-	UpdateOneByID(userID, email, name, lastname string, age int) error
+	UpdateOneByID(userID string, updateData *model.User) error
 	DeleteOneByID(userID string) error
 	FindOneByEmail(email string) (*model.User, error)
 }
