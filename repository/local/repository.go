@@ -1,6 +1,8 @@
 package local
 
-import "gitlab.com/rapsodoinc/tr/architecture/golang-web-app/model"
+import (
+	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/model"
+)
 
 type Repository interface {
 	// Typed as instance
@@ -9,4 +11,5 @@ type Repository interface {
 	FindAll() ([]*model.User, error)
 	UpdateOneByID(userID, email, name, lastname string, age int) error
 	DeleteOneByID(userID string) error
+	FindOneByEmail(email string) (*model.User, error)
 }

@@ -31,3 +31,5 @@ dist/
 *.h
 clib/
 
+# Local datasbase gitignore.
+.buntdb.db

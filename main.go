@@ -20,8 +20,17 @@ func main() {
 		log.Fatal("Error creating brand-new bunt local repository", zap.String("local_db_path_env_variable", localDbPath), zap.Error(err))
 	}
 
+	defer func() {
+		if buntRepo, ok := localRepo.(*local.BuntImpl); ok {
+			err := buntRepo.DB.Close()
+			if err != nil {
+				return
+			} // Close the DB
+		}
+	}()
+
 	// Initialize validator
-	validate := validator.NewValidator()
+	validate := validator.NewValidator(localRepo)
 
 	// Initialize fiber app
 	app := fiber.New(fiber.Config{
@@ -41,4 +50,5 @@ func main() {
 	if err = app.Listen(":8080"); err != nil {
 		log.Fatal("Application terminated with an error", zap.Error(err))
 	}
+
 }
