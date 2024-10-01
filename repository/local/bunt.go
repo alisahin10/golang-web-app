@@ -74,6 +74,7 @@ func (repo *BuntImpl) FindAll() ([]*model.User, error) {
 	}
 	return users, nil
 }
+
 func (repo *BuntImpl) UpdateOneByID(userID string, updateData *model.User) error {
 	// Get current user from database.
 	user, err := repo.FindOneByID(userID)
@@ -82,18 +83,7 @@ func (repo *BuntImpl) UpdateOneByID(userID string, updateData *model.User) error
 	}
 
 	// Checking the desired update area.
-	if updateData.Email != "" {
-		user.Email = updateData.Email
-	}
-	if updateData.Name != "" {
-		user.Name = updateData.Name
-	}
-	if updateData.Lastname != "" {
-		user.Lastname = updateData.Lastname
-	}
-	if updateData.Age != 0 {
-		user.Age = updateData.Age
-	}
+	user.UpdateFields(updateData)
 
 	// Hashing the password if it's changed.
 	if updateData.Password != "" {
@@ -119,34 +109,14 @@ func (repo *BuntImpl) UpdateOneByID(userID string, updateData *model.User) error
 	return err
 }
 
-/*
-func (repo *BuntImpl) UpdateOneByID(userID, email, name, lastname string, age int) error {
-	// Fetch the existing user
-	user, err := repo.FindOneByID(userID)
-	if err != nil {
-		return err
-	}
-	user.Email = email
-	user.Name = name
-	user.Lastname = lastname
-	user.Age = age
-	userJSON, err := json.Marshal(user)
-	if err != nil {
-		return err
-	}
-	err = repo.DB.Update(func(tx *buntdb.Tx) error {
-		_, _, err := tx.Set(fmt.Sprintf("user:%s", userID), string(userJSON), nil)
-		return err
-	})
-	return err
-}
-*/
-
 func (repo *BuntImpl) DeleteOneByID(userID string) error {
-	// Delete the user by ID
+	// Delete user from database with ID
 	err := repo.DB.Update(func(tx *buntdb.Tx) error {
 		_, err := tx.Delete(fmt.Sprintf("user:%s", userID))
-		return err
+		if err != nil {
+			return fmt.Errorf("user not found or error deleting user: %w", err)
+		}
+		return nil
 	})
 
 	return err

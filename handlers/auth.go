@@ -13,7 +13,7 @@ type auth struct {
 	validate validator.Validate
 }
 
-func NewAuth(log *zap.Logger, repo local.Repository, validate validator.Validate) *auth {
+func NewAuth(log *zap.Logger, repo local.Repository, validate validator.Validate) Handler {
 	return &auth{
 		log:      log,
 		repo:     repo,

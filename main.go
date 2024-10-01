@@ -48,7 +48,7 @@ func main() {
 
 	// Initialize user-handler
 	userHandler := handlers.NewUser(log, localRepo, validate)
-	userHandler.AssignUserEndpoints("/user", app)
+	userHandler.AssignEndpoints("/user", app)
 
 	// Start listening a port to be able to serve the http server
 	if err = app.Listen(":8080"); err != nil {
