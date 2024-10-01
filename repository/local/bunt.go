@@ -38,54 +38,27 @@ func (repo *BuntImpl) Create(user *model.User) error {
 
 func (repo *BuntImpl) FindOneByID(userID string) (*model.User, error) {
 	var user model.User
-
 	err := repo.DB.View(func(tx *buntdb.Tx) error {
-		userJSON, err := tx.Get(fmt.Sprintf("user:%s", userID))
+		// user:<userID> formatted data receive
+		val, err := tx.Get(fmt.Sprintf("user:%s", userID))
 		if err != nil {
 			return err
 		}
-
-		err = json.Unmarshal([]byte(userJSON), &user)
-		return err
+		// JSON conversion to received data
+		return json.Unmarshal([]byte(val), &user)
 	})
-
 	if err != nil {
 		return nil, err
 	}
 	return &user, nil
 }
-
-/*
-func (repo *BuntImpl) FindOneByID(userID string) (*model.User, error) {
-	var user model.User
-
-	// Read the user data from BuntDB
-	err := repo.DB.View(func(tx *buntdb.Tx) error {
-		userJSON, err := tx.Get(fmt.Sprintf("user:%s", userID))
-		if err != nil {
-			return err
-		}
-
-		// Unmarshal JSON string back into User struct
-		err = json.Unmarshal([]byte(userJSON), &user)
-		return err
-	})
-
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
-}
-
-*/
 
 func (repo *BuntImpl) FindAll() ([]*model.User, error) {
 	var users []*model.User
 
-	// Iterate through all users in the database
 	err := repo.DB.View(func(tx *buntdb.Tx) error {
 		err := tx.Ascend("", func(key, value string) bool {
-			if len(key) > 5 && key[:5] == "user:" { // Check for keys with "user:" prefix
+			if len(key) > 5 && key[:5] == "user:" { // "user:" prefix'ini kontrol ediyoruz
 				var user model.User
 				if err := json.Unmarshal([]byte(value), &user); err == nil {
 					users = append(users, &user)
@@ -101,7 +74,6 @@ func (repo *BuntImpl) FindAll() ([]*model.User, error) {
 	}
 	return users, nil
 }
-
 func (repo *BuntImpl) UpdateOneByID(userID string, updateData *model.User) error {
 	// Get current user from database.
 	user, err := repo.FindOneByID(userID)
