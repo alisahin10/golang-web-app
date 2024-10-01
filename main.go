@@ -46,6 +46,10 @@ func main() {
 	authHandler := handlers.NewAuth(log, localRepo, validate)
 	authHandler.AssignEndpoints("auth", app)
 
+	// Initialize user-handler
+	userHandler := handlers.NewUser(log, localRepo, validate)
+	userHandler.AssignUserEndpoints("/user", app)
+
 	// Start listening a port to be able to serve the http server
 	if err = app.Listen(":8080"); err != nil {
 		log.Fatal("Application terminated with an error", zap.Error(err))
