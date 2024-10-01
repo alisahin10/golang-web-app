@@ -2,6 +2,13 @@
 $3
 set
 $41
-user:e8408df1-3948-44eb-93ee-aba67f8fc422
+user:98097214-a056-4b13-8468-65b87a6e3e31
 $212
-{"id":"e8408df1-3948-44eb-93ee-aba67f8fc422","username":"alisahin","email":"alisahin@gmail.com","password":"$2a$10$HaNqLnl87D4zOL.TWEVEWONnvxmT9IMBQOczKMfihJDyOcntZjlea","name":"Ali","lastname":"Şahin","age":20}
+{"id":"98097214-a056-4b13-8468-65b87a6e3e31","username":"alisahin","email":"alisahin@gmail.com","password":"$2a$10$xFwCWzZlpnrszH3wJTwA4uqwK/LUBoyAtiGj2wYvm/6tssbCOMAke","name":"Ali","lastname":"Şahin","age":25}
+*3
+$3
+set
+$41
+user:68eea123-a297-469f-9d0f-6b270d708111
+$224
+{"id":"68eea123-a297-469f-9d0f-6b270d708111","username":"ertugrulacar","email":"ertugrulacar@gmail.com","password":"$2a$10$/EM/dGb9SDdxRDILtizvNeQ/ysV7iGWOmayYOjBURJgkhYpgew9Q.","name":"Ertuğrul","lastname":"Acar","age":28}
