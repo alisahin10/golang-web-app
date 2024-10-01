@@ -39,6 +39,26 @@ func (repo *BuntImpl) Create(user *model.User) error {
 func (repo *BuntImpl) FindOneByID(userID string) (*model.User, error) {
 	var user model.User
 
+	err := repo.DB.View(func(tx *buntdb.Tx) error {
+		userJSON, err := tx.Get(fmt.Sprintf("user:%s", userID))
+		if err != nil {
+			return err
+		}
+
+		err = json.Unmarshal([]byte(userJSON), &user)
+		return err
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+/*
+func (repo *BuntImpl) FindOneByID(userID string) (*model.User, error) {
+	var user model.User
+
 	// Read the user data from BuntDB
 	err := repo.DB.View(func(tx *buntdb.Tx) error {
 		userJSON, err := tx.Get(fmt.Sprintf("user:%s", userID))
@@ -56,6 +76,8 @@ func (repo *BuntImpl) FindOneByID(userID string) (*model.User, error) {
 	}
 	return &user, nil
 }
+
+*/
 
 func (repo *BuntImpl) FindAll() ([]*model.User, error) {
 	var users []*model.User

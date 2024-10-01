@@ -30,6 +30,7 @@ func (handler *auth) AssignEndpoints(prefix string, router fiber.Router) {
 	r.Post("register", handler.registerEndpoint)
 	r.Post("login", handler.loginEndpoint)
 	r.Post("logout", handler.logoutEndpoint)
+	r.Get("/user/:id", handler.getEndpoint)
 }
 
 func (h *auth) registerEndpoint(c *fiber.Ctx) error {
@@ -74,6 +75,7 @@ func (h *auth) registerEndpoint(c *fiber.Ctx) error {
 
 	//Get user in response and return tokens.
 	response := fiber.Map{
+		"id":            user.ID,
 		"username":      user.Username,
 		"email":         user.Email,
 		"name":          user.Name,
@@ -84,6 +86,28 @@ func (h *auth) registerEndpoint(c *fiber.Ctx) error {
 
 	h.log.Info("User created successfully", zap.String("userID", user.ID))
 	return c.Status(http.StatusCreated).JSON(response)
+
+}
+
+func (h *auth) getEndpoint(c *fiber.Ctx) error {
+	// Get user information via ID.
+	userID := c.Params("id")
+
+	// Get user data from database.
+	user, err := h.repo.FindOneByID(userID)
+	if err != nil {
+		h.log.Error("user not found", zap.Error(err))
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
+	}
+
+	// Convert user data to JSON
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"username": user.Username,
+		"email":    user.Email,
+		"name":     user.Name,
+		"lastname": user.Lastname,
+		"age":      user.Age,
+	})
 
 }
 
