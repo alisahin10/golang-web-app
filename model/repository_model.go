@@ -19,7 +19,7 @@ type UserResponse struct {
 	Age      int    `json:"age"`
 }
 
-// Display the response in order.
+// Display the response in order for Create function.
 type CreateUserResponse struct {
 	ID           string `json:"id"`
 	Username     string `json:"username"`
@@ -30,6 +30,7 @@ type CreateUserResponse struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+// Update user function encapsulation.
 // UpdateFields updates non-zero fields of the current user with the update data
 func (u *User) UpdateFields(updateData *User) {
 	if updateData.Username != "" {
