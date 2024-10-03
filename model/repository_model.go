@@ -45,7 +45,7 @@ func (u *User) UpdateFields(updateData *User) {
 	if updateData.Lastname != "" {
 		u.Lastname = updateData.Lastname
 	}
-	if updateData.Age != 0 {
+	if updateData.Age > 0 {
 		u.Age = updateData.Age
 	}
 	if updateData.Password != "" {

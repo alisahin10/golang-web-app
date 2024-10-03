@@ -23,13 +23,6 @@ func NewValidator(repo local.Repository) Validate {
 	}
 }
 
-/*
-func NewValidator() Validate {
-	return &validatorImpl{v: validator.New()}
-}
-
-*/
-
 func (v *validatorImpl) Struct(s interface{}) error {
 	return v.v.Struct(s)
 }
@@ -51,8 +44,11 @@ func (v *validatorImpl) ValidateUser(user *model.User) (bool, string) {
 	if user.Password == "" {
 		return false, "Password is required"
 	}
+	if len(user.Password) < 8 {
+		return false, "Password must be at least 8 characters long"
+	}
 
-	// Email'in veritabanında olup olmadığını kontrol ediyoruz
+	// Check if email is in the database or not
 	existingUser, err := v.repo.FindOneByEmail(user.Email)
 	if err == nil && existingUser != nil {
 		return false, "Email already exists"

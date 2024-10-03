@@ -12,4 +12,7 @@ type Repository interface {
 	UpdateOneByID(userID string, updateData *model.User) error
 	DeleteOneByID(userID string) error
 	FindOneByEmail(email string) (*model.User, error)
+	SaveRefreshToken(UserID string, refreshToken string) error
+	FindRefreshToken(UserID string) (string, error)
+	DeleteRefreshToken(userID string) error
 }

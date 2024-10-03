@@ -58,7 +58,7 @@ func (repo *BuntImpl) FindAll() ([]*model.User, error) {
 
 	err := repo.DB.View(func(tx *buntdb.Tx) error {
 		err := tx.Ascend("", func(key, value string) bool {
-			if len(key) > 5 && key[:5] == "user:" { // "user:" prefix'ini kontrol ediyoruz
+			if len(key) > 5 && key[:5] == "user:" {
 				var user model.User
 				if err := json.Unmarshal([]byte(value), &user); err == nil {
 					users = append(users, &user)
@@ -153,4 +153,42 @@ func (repo *BuntImpl) FindOneByEmail(email string) (*model.User, error) {
 	}
 
 	return &user, nil
+}
+
+func (repo *BuntImpl) SaveRefreshToken(UserID string, refreshToken string) error {
+	return repo.DB.Update(func(tx *buntdb.Tx) error {
+		key := fmt.Sprintf("refresh_token:%s", UserID)
+		_, _, err := tx.Set(key, refreshToken, nil)
+		return err
+	})
+}
+
+func (repo *BuntImpl) FindRefreshToken(token string) (string, error) {
+	var userID string
+	err := repo.DB.View(func(tx *buntdb.Tx) error {
+		err := tx.Ascend("", func(key, value string) bool {
+			if value == token {
+				// Key format is "refresh_token:<userID>", we extract the userID
+				userID = key[len("refresh_token:"):]
+				return false // Stop iteration once the token is found
+			}
+			return true
+		})
+		return err
+	})
+	if err != nil {
+		return "", err
+	}
+	if userID == "" {
+		return "", fmt.Errorf("refresh token not found")
+	}
+	return userID, nil
+}
+
+func (repo *BuntImpl) DeleteRefreshToken(userID string) error {
+	return repo.DB.Update(func(tx *buntdb.Tx) error {
+		key := fmt.Sprintf("refresh_token:%s", userID)
+		_, err := tx.Delete(key)
+		return err
+	})
 }

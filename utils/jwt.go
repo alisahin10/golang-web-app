@@ -2,10 +2,11 @@ package utils
 
 import (
 	"github.com/dgrijalva/jwt-go"
+	"os"
 	"time"
 )
 
-var jwtSecret = []byte("your-secret-key")
+var jwtSecret = []byte(os.Getenv("JWT_SECRET")) // JWT_SECRET environment variable
 
 // GenerateTokens creates both access and refresh tokens for a user
 func GenerateTokens(username, email string) (string, string, error) {

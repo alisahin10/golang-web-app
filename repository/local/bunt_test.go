@@ -47,7 +47,7 @@ func TestFindOneByID(t *testing.T) {
 
 	repo, _ := NewBuntRepository(os.Getenv("LOCAL_DB_PATH"))
 
-	// Setup a known user
+	// Set up a known user
 	_ = repo.Create(&model.User{ID: "123", Email: "test@example.com"})
 
 	testCases := []struct {
@@ -182,5 +182,60 @@ func TestFindOneByEmail(t *testing.T) {
 				t.Fatalf("FindOneByEmail() error = %v, wantErr = %v", err, tc.wantErr)
 			}
 		})
+	}
+}
+
+func TestFindAll(t *testing.T) {
+	// Set up environment for test
+	os.Setenv("LOCAL_DB_PATH", "./test_find_all.db")
+	defer os.Remove("./test_find_all.db")
+
+	// Create a new repository
+	repo, err := NewBuntRepository(os.Getenv("LOCAL_DB_PATH"))
+	if err != nil {
+		t.Fatalf("Error creating repository: %v", err)
+	}
+
+	// Add multiple users to the repository
+	users := []*model.User{
+		{ID: "1", Username: "user1", Email: "user1@example.com"},
+		{ID: "2", Username: "user2", Email: "user2@example.com"},
+		{ID: "3", Username: "user3", Email: "user3@example.com"},
+	}
+
+	// Insert users into the database
+	for _, user := range users {
+		err := repo.Create(user)
+		if err != nil {
+			t.Fatalf("Error creating user %s: %v", user.Username, err)
+		}
+	}
+
+	// Call the FindAll function
+	foundUsers, err := repo.FindAll()
+	if err != nil {
+		t.Fatalf("Error finding all users: %v", err)
+	}
+
+	// Verify that all users are retrieved
+	if len(foundUsers) != len(users) {
+		t.Fatalf("Expected %d users, found %d", len(users), len(foundUsers))
+	}
+
+	// Map the found users by ID for easier comparison
+	foundUserMap := make(map[string]*model.User)
+	for _, user := range foundUsers {
+		foundUserMap[user.ID] = user
+	}
+
+	// Check that all created users are found
+	for _, user := range users {
+		foundUser, exists := foundUserMap[user.ID]
+		if !exists {
+			t.Fatalf("User with ID %s not found", user.ID)
+		}
+		if foundUser.Username != user.Username || foundUser.Email != user.Email {
+			t.Fatalf("Expected user %v, found %v", user, foundUser)
+		}
 	}
 }
