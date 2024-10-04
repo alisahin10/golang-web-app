@@ -72,7 +72,12 @@ func (handler *auth) loginEndpoint(ctx *fiber.Ctx) error {
 
 	// Delete any previous refresh token before issuing a new one
 	if err := handler.repo.DeleteRefreshToken(user.ID); err != nil {
-		handler.log.Error("Failed to delete previous refresh token", zap.Error(err))
+		// If error is "not found" then skip the logging
+		if err.Error() == "not found" {
+			handler.log.Info("No previous refresh token found", zap.String("userID", user.ID))
+		} else {
+			handler.log.Error("Failed to delete previous refresh token", zap.Error(err))
+		}
 	}
 
 	// Generate access and refresh tokens
@@ -171,6 +176,11 @@ func (handler *auth) refreshTokenEndpoint(ctx *fiber.Ctx) error {
 		return fiber.ErrUnauthorized // 401 - Unauthorized if the user is not found or identifier mismatch
 	}
 
+	// Delete any previous refresh token before issuing a new one
+	if err := handler.repo.DeleteRefreshToken(user.ID); err != nil {
+		handler.log.Error("Failed to delete previous refresh token", zap.Error(err))
+	}
+
 	// Generate new access and refresh tokens
 	accessToken, refreshToken, err := utils.GenerateTokens(user.Username, user.Email)
 	if err != nil {
@@ -188,5 +198,6 @@ func (handler *auth) refreshTokenEndpoint(ctx *fiber.Ctx) error {
 	response := utils.ToCreateUserResponse(user, accessToken, refreshToken)
 
 	// Respond with the structured response
+	handler.log.Info("Successfully created new token", zap.String("user", req.Identifier))
 	return ctx.Status(fiber.StatusOK).JSON(response)
 }

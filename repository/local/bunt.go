@@ -166,6 +166,30 @@ func (repo *BuntImpl) SaveRefreshToken(UserID string, refreshToken string) error
 func (repo *BuntImpl) FindRefreshToken(token string) (string, error) {
 	var userID string
 	err := repo.DB.View(func(tx *buntdb.Tx) error {
+		// Iterate over keys that start with "refresh_token:"
+		err := tx.Ascend("", func(key, value string) bool {
+			if key[:14] == "refresh_token:" && value == token {
+				// Extract the userID from the key
+				userID = key[len("refresh_token:"):]
+				return false // Stop iteration once the token is found
+			}
+			return true
+		})
+		return err
+	})
+	if err != nil {
+		return "", err
+	}
+	if userID == "" {
+		return "", fmt.Errorf("refresh token not found")
+	}
+	return userID, nil
+}
+
+/*
+func (repo *BuntImpl) FindRefreshToken(token string) (string, error) {
+	var userID string
+	err := repo.DB.View(func(tx *buntdb.Tx) error {
 		err := tx.Ascend("", func(key, value string) bool {
 			if value == token {
 				// Key format is "refresh_token:<userID>", we extract the userID
@@ -184,6 +208,8 @@ func (repo *BuntImpl) FindRefreshToken(token string) (string, error) {
 	}
 	return userID, nil
 }
+
+*/
 
 func (repo *BuntImpl) DeleteRefreshToken(userID string) error {
 	return repo.DB.Update(func(tx *buntdb.Tx) error {

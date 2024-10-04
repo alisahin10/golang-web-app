@@ -16,15 +16,6 @@ func ToResponseUser(user *model.User) model.UserResponse {
 	}
 }
 
-// ToResponseUsers converts a list of User models to a list of UserResponse models
-func ToResponseUsers(users []model.User) []model.UserResponse {
-	var responseUsers []model.UserResponse
-	for _, user := range users {
-		responseUsers = append(responseUsers, ToResponseUser(&user))
-	}
-	return responseUsers
-}
-
 // ToCreateUserResponse generates a CreateUserResponse from a User model and tokens.
 func ToCreateUserResponse(user *model.User, accessToken string, refreshToken string) model.CreateUserResponse {
 	return model.CreateUserResponse{

@@ -28,7 +28,7 @@ func TestCreateUser(t *testing.T) {
 		{
 			name:    "Empty Fields",
 			user:    model.User{ID: "2", Username: "", Email: "", Password: "", Name: "", Lastname: "", Age: 0},
-			wantErr: false, // Assuming no validation check in `Create`
+			wantErr: false,
 		},
 	}
 
@@ -41,6 +41,7 @@ func TestCreateUser(t *testing.T) {
 		})
 	}
 }
+
 func TestFindOneByID(t *testing.T) {
 	os.Setenv("LOCAL_DB_PATH", "./test_find.db")
 	defer os.Remove("./test_find.db")
@@ -237,5 +238,100 @@ func TestFindAll(t *testing.T) {
 		if foundUser.Username != user.Username || foundUser.Email != user.Email {
 			t.Fatalf("Expected user %v, found %v", user, foundUser)
 		}
+	}
+}
+
+func TestSaveRefreshToken(t *testing.T) {
+	os.Setenv("LOCAL_DB_PATH", "./test_refresh_token.db")
+	defer os.Remove("./test_refresh_token.db")
+
+	repo, err := NewBuntRepository(os.Getenv("LOCAL_DB_PATH"))
+	if err != nil {
+		t.Fatalf("Error creating repository: %v", err)
+	}
+
+	// Save a refresh token for a user
+	err = repo.SaveRefreshToken("user123", "token123")
+	if err != nil {
+		t.Fatalf("Error saving refresh token: %v", err)
+	}
+
+	// Verify that the token was saved correctly
+	tokenOwner, err := repo.FindRefreshToken("token123")
+	if err != nil {
+		t.Fatalf("Error finding refresh token: %v", err)
+	}
+	if tokenOwner != "user123" {
+		t.Fatalf("Expected userID 'user123', got '%s'", tokenOwner)
+	}
+}
+
+func TestFindRefreshToken(t *testing.T) {
+	os.Setenv("LOCAL_DB_PATH", "./test_find_refresh_token.db")
+	defer os.Remove("./test_find_refresh_token.db")
+
+	repo, err := NewBuntRepository(os.Getenv("LOCAL_DB_PATH"))
+	if err != nil {
+		t.Fatalf("Error creating repository: %v", err)
+	}
+
+	// Save a refresh token
+	_ = repo.SaveRefreshToken("user123", "token123")
+
+	testCases := []struct {
+		name       string
+		token      string
+		wantUserID string
+		wantErr    bool
+	}{
+		{
+			name:       "Token Exists",
+			token:      "token123",
+			wantUserID: "user123",
+			wantErr:    false,
+		},
+		{
+			name:       "Token Does Not Exist",
+			token:      "token999",
+			wantUserID: "",
+			wantErr:    true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			userID, err := repo.FindRefreshToken(tc.token)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("FindRefreshToken() error = %v, wantErr = %v", err, tc.wantErr)
+			}
+			if userID != tc.wantUserID {
+				t.Fatalf("FindRefreshToken() userID = %v, want %v", userID, tc.wantUserID)
+			}
+		})
+	}
+}
+
+func TestDeleteRefreshToken(t *testing.T) {
+	os.Setenv("LOCAL_DB_PATH", "./test_delete_refresh_token.db")
+	defer os.Remove("./test_delete_refresh_token.db")
+
+	repo, err := NewBuntRepository(os.Getenv("LOCAL_DB_PATH"))
+	if err != nil {
+		t.Fatalf("Error creating repository: %v", err)
+	}
+
+	// Save a refresh token
+	_ = repo.SaveRefreshToken("user123", "token123")
+
+	// Delete the refresh token
+	err = repo.DeleteRefreshToken("user123")
+	if err != nil {
+		t.Fatalf("Error deleting refresh token: %v", err)
+	}
+
+	// Verify that the token was deleted
+	_, err = repo.FindRefreshToken("token123")
+	if err == nil {
+		t.Fatalf("Expected error finding deleted refresh token, got nil")
 	}
 }

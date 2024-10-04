@@ -14,7 +14,7 @@ func GenerateTokens(username, email string) (string, string, error) {
 	accessTokenClaims := jwt.MapClaims{
 		"username": username,
 		"email":    email,
-		"exp":      time.Now().Add(10 * time.Minute).Unix(),
+		"exp":      time.Now().Add(10 * time.Second).Unix(),
 	}
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessTokenClaims)
 	accessTokenString, err := accessToken.SignedString(jwtSecret)
