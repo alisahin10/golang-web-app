@@ -1,203 +1,157 @@
 package handlers
 
 import (
+	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
-	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/repository/local"
+	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/model"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/utils"
-	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/validator"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
 
-type auth struct {
-	log      *zap.Logger
-	repo     local.Repository
-	validate validator.Validate
-}
+// login handles user login operations.
+func (auth *Auth) login(ctx *fiber.Ctx) error {
+	auth.log.Info("Login endpoint called")
 
-// NewAuth is the constructor for the auth handler. It initializes dependencies (logger, repo, validator)
-func NewAuth(log *zap.Logger, repo local.Repository, validate validator.Validate) Handler {
-	return &auth{
-		log:      log,
-		repo:     repo,
-		validate: validate,
-	}
-}
-
-// AssignEndpoints assigns routes for login and logout to the Fiber router.
-func (handler *auth) AssignEndpoints(prefix string, router fiber.Router) {
-	r := router.Group(prefix)
-
-	r.Post("login", handler.loginEndpoint)
-	r.Post("logout", handler.logoutEndpoint)
-	r.Post("refresh", handler.refreshTokenEndpoint)
-
-}
-
-// loginEndpoint handles the login process by validating the user, checking credentials, and generating tokens.
-func (handler *auth) loginEndpoint(ctx *fiber.Ctx) error {
-	handler.log.Info("login endpoint called")
-
-	// Struct for parsing login request body
-	type loginRequest struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
-	var req loginRequest
-
-	// Parse the request body into loginRequest struct
+	var req model.LoginRequest
+	// Parse the request body
 	if err := ctx.BodyParser(&req); err != nil {
-		handler.log.Error("failed to parse body", zap.Error(err))
-		return fiber.ErrBadRequest // Return 400 Bad Request if parsing fails
+		auth.log.Error("Error parsing request body", zap.Error(err))
+		return fiber.ErrBadRequest // Return BadRequest on body parsing error
 	}
 
-	// Validate the parsed request (e.g., check if Email and Password are present)
-	if err := handler.validate.Struct(req); err != nil {
-		handler.log.Error("failed to validate body", zap.Error(err))
-		return fiber.ErrBadRequest // Return 400 if validation fails
-	}
-
-	// Fetch the user from the repository using their email
-	user, err := handler.repo.FindOneByEmail(req.Email)
-	if err != nil {
-		handler.log.Error("failed to find user by email", zap.Error(err))
-		return fiber.ErrInternalServerError // This could be improved to return 404 if user not found
-	}
-
-	// Compare the provided password with the hashed password from the database
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
-		handler.log.Error("invalid password", zap.Error(err))
-		return fiber.ErrUnauthorized // Change to Unauthorized (401) instead of Internal Server Error (500)
-	}
-
-	// Delete any previous refresh token before issuing a new one
-	if err := handler.repo.DeleteRefreshToken(user.ID); err != nil {
-		// If error is "not found" then skip the logging
-		if err.Error() == "not found" {
-			handler.log.Info("No previous refresh token found", zap.String("userID", user.ID))
-		} else {
-			handler.log.Error("Failed to delete previous refresh token", zap.Error(err))
+	// Validation check
+	if err := auth.validate.Struct(&req); err != nil {
+		// Log validation errors
+		for _, err := range err.(validator.ValidationErrors) {
+			auth.log.Error("Validation failed",
+				zap.String("field", err.StructNamespace()),
+				zap.String("tag", err.Tag()),
+				zap.String("value", err.Param()),
+			)
 		}
+		return fiber.ErrBadRequest // Return BadRequest on validation error
 	}
 
-	// Generate access and refresh tokens
+	// Find user by email
+	user, err := auth.repo.FindOneByEmail(req.Email)
+	if err != nil {
+		auth.log.Error("Find user by email failed", zap.Error(err), zap.String("email", req.Email))
+		return fiber.ErrUnauthorized // Return Unauthorized if user not found
+	}
+
+	// Compare passwords
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		auth.log.Error("Incorrect password", zap.String("email", req.Email))
+		return fiber.ErrUnauthorized // Return Unauthorized if password is incorrect
+	}
+
+	// Generate tokens
 	accessToken, refreshToken, err := utils.GenerateTokens(user.Username, user.Email)
 	if err != nil {
-		handler.log.Error("failed to generate tokens", zap.Error(err))
-		return fiber.ErrInternalServerError // Return 500 if token generation fails
+		auth.log.Error("Generate access token failed", zap.Error(err))
+		return fiber.ErrInternalServerError // Return InternalServerError on token generation failure
 	}
 
-	// Save the refresh token in the database
-	err = handler.repo.SaveRefreshToken(user.ID, refreshToken)
-	if err != nil {
-		handler.log.Error("failed to save refresh token", zap.Error(err))
-		return fiber.ErrInternalServerError // Return 500 if refresh token save fails
+	// Save refresh token
+	if err := auth.repo.SaveRefreshToken(user.ID, refreshToken); err != nil {
+		auth.log.Error("Save refresh token failed", zap.Error(err))
+		return fiber.ErrInternalServerError // Return InternalServerError on refresh token save failure
 	}
 
-	// Respond with access token, refresh token, and user details
+	// Return successful login response
 	return ctx.JSON(fiber.Map{
 		"access_token":  accessToken,
 		"refresh_token": refreshToken,
-		"user":          utils.ToResponseUser(user),
+		"user":          utils.ToResponseUser(user), // Response with user information
 	})
-
 }
 
-func (handler *auth) logoutEndpoint(ctx *fiber.Ctx) error {
-	// Parse request body to get the token
-	type logoutRequest struct {
-		Token string `json:"token"`
-	}
+// logout handles user logout operations.
+func (auth *Auth) logout(ctx *fiber.Ctx) error {
+	auth.log.Info("Logout endpoint called")
 
-	var req logoutRequest
+	var req model.LogoutRequest
+	// Parse the request body
 	if err := ctx.BodyParser(&req); err != nil {
-		handler.log.Error("Failed to parse body", zap.Error(err))
-		return fiber.ErrBadRequest // Return 400 if body parsing fails
+		auth.log.Error("Error parsing request body", zap.Error(err))
+		return fiber.ErrBadRequest // Return BadRequest on body parsing error
 	}
 
+	// Token check
 	if req.Token == "" {
-		return fiber.ErrBadRequest // Return 400 if no token is provided
+		return ctx.JSON(fiber.Map{
+			"status":  "logout unsuccessful", // Logout operation unsuccessful
+			"message": "Token is required",   // Required token is missing
+		})
 	}
 
-	handler.log.Info("Logout successful", zap.String("token", req.Token))
-
-	// Find the user associated with the refresh token by its value
-	userID, err := handler.repo.FindRefreshToken(req.Token)
+	// Find refresh token
+	userID, err := auth.repo.FindRefreshToken(req.Token)
 	if err != nil {
-		handler.log.Error("Invalid refresh token", zap.Error(err))
-		return fiber.ErrUnauthorized // If token is invalid, respond with 401
+		auth.log.Error("Find refresh token failed", zap.Error(err))
+		return fiber.ErrUnauthorized // Return Unauthorized if token not found
 	}
 
-	// Delete the refresh token from the database by userID
-	if err := handler.repo.DeleteRefreshToken(userID); err != nil {
-		handler.log.Error("Failed to delete refresh token", zap.Error(err))
-		return fiber.ErrInternalServerError // Return 500 if refresh token deletion fails
+	// Delete refresh token
+	if err := auth.repo.DeleteRefreshToken(userID); err != nil {
+		auth.log.Error("Delete refresh token failed", zap.Error(err))
+		return fiber.ErrInternalServerError // Return InternalServerError on refresh token deletion failure
 	}
 
-	// Success response
+	// Return successful response
 	return ctx.JSON(fiber.Map{
-		"message": "Logged out successfully",
+		"status":  "logged out",              // Logout operation successful
+		"message": "Logged out successfully", // Successful logout message
 	})
 }
 
-func (handler *auth) refreshTokenEndpoint(ctx *fiber.Ctx) error {
-	type refreshRequest struct {
-		Identifier   string `json:"identifier"`    // Can be username or email
-		RefreshToken string `json:"refresh_token"` // The refresh token provided by the user
-	}
-
-	var req refreshRequest
-	// Parse the request body to get the refresh token and identifier
+// refreshToken creates new access and refresh tokens using the current refresh token.
+func (auth *Auth) refreshToken(ctx *fiber.Ctx) error {
+	auth.log.Info("Refresh token endpoint called")
+	var req model.RefreshRequest
+	// Parse the request body
 	if err := ctx.BodyParser(&req); err != nil {
-		return fiber.ErrBadRequest // 400 - Bad request if the body is malformed
+		auth.log.Error("Validation failed")
+		return fiber.ErrBadRequest // Return BadRequest on body parsing error
 	}
-
-	// Check if the identifier or token is empty
+	// Return BadRequest if Identifier or RefreshToken is missing
 	if req.Identifier == "" || req.RefreshToken == "" {
-		return fiber.ErrBadRequest // 400 - Bad request if identifier or token is missing
+		return fiber.ErrBadRequest
 	}
-
-	// Verify if the refresh token has expired
+	// Check if the refresh token has expired
 	if utils.IsExpired(req.RefreshToken) {
-		return fiber.ErrUnauthorized // 401 - Unauthorized if the token has expired
+		return fiber.ErrBadRequest // Return BadRequest if expired
 	}
-
-	// Verify the refresh token by searching for it in the database
-	userID, err := handler.repo.FindRefreshToken(req.RefreshToken)
+	// Find user ID using refresh token
+	userID, err := auth.repo.FindRefreshToken(req.RefreshToken)
 	if err != nil {
-		handler.log.Error("Invalid refresh token", zap.Error(err))
-		return fiber.ErrUnauthorized // 401 - Unauthorized if token is not found or invalid
+		auth.log.Error("Find refresh token failed", zap.Error(err))
+		return fiber.ErrInternalServerError // Return InternalServerError on refresh token retrieval failure
 	}
-
-	// Fetch the user using the identifier (could be email or username)
-	user, err := handler.repo.FindOneByID(userID)
+	// Find user
+	user, err := auth.repo.FindOneByEmail(userID)
 	if err != nil || (user.Email != req.Identifier && user.Username != req.Identifier) {
-		handler.log.Error("User not found or identifier mismatch", zap.Error(err))
-		return fiber.ErrUnauthorized // 401 - Unauthorized if the user is not found or identifier mismatch
+		auth.log.Error("Find user by email failed", zap.Error(err))
+		return fiber.ErrUnauthorized // Return Unauthorized if user not found or validation fails
 	}
-
-	// Delete any previous refresh token before issuing a new one
-	if err := handler.repo.DeleteRefreshToken(user.ID); err != nil {
-		handler.log.Error("Failed to delete previous refresh token", zap.Error(err))
+	// Delete old refresh token
+	if err := auth.repo.DeleteRefreshToken(user.ID); err != nil {
+		auth.log.Error("Delete refresh token failed", zap.Error(err))
 	}
-
-	// Generate new access and refresh tokens
+	// Generate new tokens
 	accessToken, refreshToken, err := utils.GenerateTokens(user.Username, user.Email)
 	if err != nil {
-		handler.log.Error("Failed to generate tokens", zap.Error(err))
-		return fiber.ErrInternalServerError // 500 - Internal server error if token generation fails
+		auth.log.Error("Generate access token failed", zap.Error(err))
+		return fiber.ErrInternalServerError // Return InternalServerError on token generation failure
 	}
-
-	// Optionally, save the new refresh token in the database
-	if err := handler.repo.SaveRefreshToken(user.ID, refreshToken); err != nil {
-		handler.log.Error("Failed to save new refresh token", zap.Error(err))
-		return fiber.ErrInternalServerError // 500 - Internal server error if saving refresh token fails
+	// Save new refresh token
+	if err := auth.repo.SaveRefreshToken(user.ID, refreshToken); err != nil {
+		auth.log.Error("Save refresh token failed", zap.Error(err))
+		return fiber.ErrInternalServerError // Return InternalServerError on new refresh token save failure
 	}
-
-	// Use the ToCreateUserResponse function to generate the response
+	// Create successful response
 	response := utils.ToCreateUserResponse(user, accessToken, refreshToken)
-
-	// Respond with the structured response
-	handler.log.Info("Successfully created new token", zap.String("user", req.Identifier))
-	return ctx.Status(fiber.StatusOK).JSON(response)
+	auth.log.Info("Successfully created new token", zap.String("user", req.Identifier))
+	return ctx.Status(fiber.StatusOK).JSON(response) // Return successful response with new tokens
 }
