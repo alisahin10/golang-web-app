@@ -72,7 +72,7 @@ func (handler *Auth) loginEndpoint(ctx *fiber.Ctx) error {
 	user, err := handler.repo.FindOneByEmail(req.Email)
 	if err != nil {
 		handler.log.Error("failed to find user by email", zap.Error(err))
-		return fiber.ErrInternalServerError // This could be improved to return 404 if user not found
+		return &fiber.Error{Code: fiber.StatusUnauthorized, Message: "invalid username or password"} // This could be improved to return 404 if user not found
 	}
 
 	// Compare the provided password with the hashed password from the database
@@ -135,7 +135,7 @@ func (handler *Auth) logoutEndpoint(ctx *fiber.Ctx) error {
 	userID, err := handler.repo.FindRefreshToken(req.Token)
 	if err != nil {
 		handler.log.Error("Invalid refresh token", zap.Error(err))
-		return fiber.ErrUnauthorized // If token is invalid, respond with 401
+		return &fiber.Error{Code: fiber.StatusUnauthorized, Message: "You are not logged in"} // If token is invalid, respond with 401
 	}
 
 	// Delete the refresh token from the database by userID
@@ -165,26 +165,26 @@ func (handler *Auth) refreshTokenEndpoint(ctx *fiber.Ctx) error {
 
 	// Check if the identifier or token is empty
 	if req.Identifier == "" || req.RefreshToken == "" {
-		return fiber.ErrBadRequest // 400 - Bad request if identifier or token is missing
+		return &fiber.Error{Code: fiber.StatusBadRequest, Message: "There is no refresh token\""} // 400 - Bad request if identifier or token is missing
 	}
 
 	// Verify if the refresh token has expired
 	if jwt.IsExpired(req.RefreshToken, handler.config.JWTSecret) {
-		return fiber.ErrUnauthorized // 401 - Unauthorized if the token has expired
+		return &fiber.Error{Code: fiber.StatusUnauthorized, Message: "Token has expired"} // 401 - Unauthorized if the token has expired
 	}
 
 	// Verify the refresh token by searching for it in the database
 	userID, err := handler.repo.FindRefreshToken(req.RefreshToken)
 	if err != nil {
 		handler.log.Error("Invalid refresh token", zap.Error(err))
-		return fiber.ErrUnauthorized // 401 - Unauthorized if token is not found or invalid
+		return &fiber.Error{Code: fiber.StatusUnauthorized, Message: "Invalid refresh token"} // 401 - Unauthorized if token is not found or invalid
 	}
 
 	// Fetch the user using the identifier (could be email or username)
 	user, err := handler.repo.FindOneByID(userID)
 	if err != nil || (user.Email != req.Identifier && user.Username != req.Identifier) {
 		handler.log.Error("User not found or identifier mismatch", zap.Error(err))
-		return fiber.ErrUnauthorized // 401 - Unauthorized if the user is not found or identifier mismatch
+		return &fiber.Error{Code: fiber.StatusUnauthorized, Message: "There is no matching user"} // 401 - Unauthorized if the user is not found or identifier mismatch
 	}
 
 	// Delete any previous refresh token before issuing a new one
@@ -196,13 +196,14 @@ func (handler *Auth) refreshTokenEndpoint(ctx *fiber.Ctx) error {
 	accessToken, refreshToken, err := jwt.GenerateTokens(user.ID, user.Username, user.Role, handler.config.JWTSecret)
 	if err != nil {
 		handler.log.Error("Failed to generate tokens", zap.Error(err))
-		return fiber.ErrInternalServerError // 500 - Internal server error if token generation fails
+		return &fiber.Error{Code: fiber.StatusInternalServerError, Message: "Failed to generate tokens"}
+		// 500 - Internal server error if token generation fails
 	}
 
 	// Save the new refresh token in the database
 	if err := handler.repo.SaveRefreshToken(user.ID, refreshToken); err != nil {
 		handler.log.Error("Failed to save new refresh token", zap.Error(err))
-		return fiber.ErrInternalServerError // 500 - Internal server error if saving refresh token fails
+		return &fiber.Error{Code: fiber.StatusInternalServerError, Message: "Failed to save new refresh token"} // 500 - Internal server error if saving refresh token fails
 	}
 
 	// Use the ToCreateUserResponse function to generate the response
