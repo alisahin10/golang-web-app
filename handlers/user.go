@@ -5,6 +5,7 @@ import (
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/middleware"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/model"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/repository/local"
+	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/services"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/utils"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/validator"
 	"go.uber.org/zap"
@@ -12,18 +13,20 @@ import (
 )
 
 type user struct {
-	log      *zap.Logger
-	repo     local.Repository
-	validate validator.Validate
-	config   *AppConfig // Added config to access JWT secret
+	log         *zap.Logger
+	repo        local.Repository
+	validate    validator.Validate
+	userService services.UserService
+	config      *AppConfig
 }
 
-func NewUser(log *zap.Logger, repo local.Repository, validate validator.Validate, config *AppConfig) Handler {
+func NewUser(log *zap.Logger, repo local.Repository, validate validator.Validate, config *AppConfig, userService services.UserService) Handler {
 	return &user{
-		log:      log,
-		repo:     repo,
-		validate: validate,
-		config:   config, // Initialize with config
+		log:         log,
+		repo:        repo,
+		validate:    validate,
+		config:      config,
+		userService: userService,
 	}
 }
 
@@ -61,6 +64,16 @@ func (handler *user) createEndpoint(c *fiber.Ctx) error {
 	if !isValid {
 		handler.log.Error("Validation error", zap.String("error", validationErr))
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": validationErr})
+	}
+
+	// Check if email is already taken using the UserService
+	emailTaken, err := handler.userService.IsEmailTaken(user.Email)
+	if err != nil {
+		handler.log.Error("Error checking email", zap.Error(err))
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not check email"})
+	}
+	if emailTaken {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Email is already taken"})
 	}
 
 	// Hash the user's password.
@@ -237,6 +250,7 @@ func (handler *user) deleteEndpoint(c *fiber.Ctx) error {
 	})
 }
 
+/*
 // findByEmailEndpoint allows searching for a user by email.
 func (handler *user) findByEmailEndpoint(c *fiber.Ctx) error {
 	// Take query parameters from email
@@ -264,6 +278,42 @@ func (handler *user) findByEmailEndpoint(c *fiber.Ctx) error {
 	}
 
 	// User found response message with JSON
+	userResponse := utils.ToResponseUser(user)
+
+	handler.log.Info("User found by email", zap.String("email", email))
+	return c.Status(fiber.StatusOK).JSON(userResponse)
+}
+
+*/
+
+// findByEmailEndpoint allows searching for a user by email.
+func (handler *user) findByEmailEndpoint(c *fiber.Ctx) error {
+	// Get query parameter for email
+	email := c.Query("email")
+
+	// Email parameter control
+	if email == "" {
+		handler.log.Error("Email query parameter is missing")
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Email query parameter is required"})
+	}
+
+	// Validate email format using the validator
+	if !handler.validate.ValidateEmailFormat(email) {
+		handler.log.Error("Invalid email format", zap.String("email", email))
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid email format"})
+	}
+
+	// Verifying the email through logging
+	handler.log.Info("Searching for user with email:", zap.String("email", email))
+
+	// Search the user in the database using UserService
+	user, err := handler.userService.FindByEmail(email)
+	if err != nil {
+		handler.log.Error("User not found by email", zap.String("email", email), zap.Error(err))
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+	}
+
+	// User found, create response
 	userResponse := utils.ToResponseUser(user)
 
 	handler.log.Info("User found by email", zap.String("email", email))

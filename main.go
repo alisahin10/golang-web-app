@@ -4,6 +4,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/handlers"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/repository/local"
+	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/services"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/validator"
 	"go.uber.org/zap"
 	"log"
@@ -20,11 +21,10 @@ func main() {
 	if err != nil {
 		logger.Fatal("Error creating brand-new bunt local repository", zap.String("local_db_path_env_variable", localDbPath), zap.Error(err))
 	}
-
 	defer localRepo.Close()
 
 	// Initialize validator
-	validate := validator.NewValidator(localRepo)
+	validate := validator.NewValidator() // No repository passed
 
 	// Load JWT secret from environment variable
 	jwtSecret := os.Getenv("JWT_SECRET")
@@ -33,9 +33,12 @@ func main() {
 	}
 
 	// Initialize AppConfig with the JWT secret
-	config := &handlers.AppConfig{ // Use handlers.AppConfig here
+	config := &handlers.AppConfig{
 		JWTSecret: []byte(jwtSecret),
 	}
+
+	// Initialize UserService
+	userService := services.NewUserService(localRepo) // Create the UserService instance
 
 	// Initialize fiber app
 	app := fiber.New(fiber.Config{
@@ -53,8 +56,8 @@ func main() {
 	authHandler := handlers.NewAuth(logger, localRepo, validate, config)
 	authHandler.AssignEndpoints("auth", app)
 
-	// Initialize user-handler and pass the config containing JWT secret
-	userHandler := handlers.NewUser(logger, localRepo, validate, config)
+	// Initialize user-handler and pass the config containing JWT secret and userService
+	userHandler := handlers.NewUser(logger, localRepo, validate, config, userService)
 	userHandler.AssignEndpoints("/user", app)
 
 	// Start listening on port 8080
