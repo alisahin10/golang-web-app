@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/gofiber/fiber/v2"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/handlers"
+	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/middleware"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/repository/local"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/services"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/validator"
@@ -14,7 +15,7 @@ import (
 func main() {
 	// Initialize logger
 	logger, _ := zap.NewDevelopment()
-
+	errors := middleware.AppError{}
 	// Initialize local repository
 	localDbPath := os.Getenv("LOCAL_DB_PATH")
 	localRepo, err := local.NewBuntRepository(localDbPath)
@@ -53,11 +54,11 @@ func main() {
 	})
 
 	// Initialize auth-handler and pass the config containing JWT secret
-	authHandler := handlers.NewAuth(logger, localRepo, validate, config)
+	authHandler := handlers.NewAuth(logger, localRepo, validate, config, errors)
 	authHandler.AssignEndpoints("auth", app)
 
 	// Initialize user-handler and pass the config containing JWT secret and userService
-	userHandler := handlers.NewUser(logger, localRepo, validate, config, userService)
+	userHandler := handlers.NewUser(logger, localRepo, validate, config, userService, errors)
 	userHandler.AssignEndpoints("/user", app)
 
 	// Start listening on port 8080
