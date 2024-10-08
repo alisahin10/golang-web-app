@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/tidwall/buntdb"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/model"
-	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/utils"
+	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/utils/password"
 )
 
 // BuntImpl struct that holds the database instance
@@ -95,7 +95,7 @@ func (repo *BuntImpl) UpdateOneByID(userID string, updateData *model.User) error
 
 	// Hashing the password if it's changed.
 	if updateData.Password != "" {
-		hashedPassword, err := utils.HashPassword(updateData.Password)
+		hashedPassword, err := password.HashPassword(updateData.Password)
 		if err != nil {
 			return fmt.Errorf("password hash error: %v", err) // Return error if password hashing fails.
 		}

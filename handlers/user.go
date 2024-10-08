@@ -6,8 +6,9 @@ import (
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/model"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/repository/local"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/services"
-	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/utils"
+	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/utils/id"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/utils/jwt"
+	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/utils/password"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/validator"
 	"go.uber.org/zap"
 	"net/http"
@@ -45,7 +46,10 @@ func (handler *user) AssignEndpoints(prefix string, router fiber.Router) {
 	r.Get("/", handler.getAllEndpoint)            // GET /user: Retrieves a list of all users.
 
 	// Routes that require JWT authentication
-	protectedRoutes := r.Group("/", middleware.JWTAuthMiddleware)
+	//protectedRoutes := r.Group("/", middleware.JWTAuthMiddleware)
+
+	// Routes that require JWT authentication
+	protectedRoutes := r.Group("/", middleware.JWTAuthMiddleware(handler.config.JWTSecret))
 
 	// These routes require the user to be authenticated (JWT)
 	protectedRoutes.Patch("update/:id", handler.updateEndpoint) // PATCH /user/update/:id: Updates user information.
@@ -80,7 +84,7 @@ func (handler *user) createEndpoint(c *fiber.Ctx) error {
 	}
 
 	// Hash the user's password.
-	hashedPassword, err := utils.HashPassword(user.Password)
+	hashedPassword, err := password.HashPassword(user.Password)
 	if err != nil {
 		handler.log.Error("Failed to hash password", zap.Error(err))
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to hash password")
@@ -88,7 +92,7 @@ func (handler *user) createEndpoint(c *fiber.Ctx) error {
 	user.Password = hashedPassword
 
 	// Assign a UUID to the user using the UUID utility function.
-	user.ID = utils.GenerateUUID()
+	user.ID = id.GenerateUUID()
 
 	// Assign default role to the new user
 	user.Role = "user" // Default role assigned to new users
