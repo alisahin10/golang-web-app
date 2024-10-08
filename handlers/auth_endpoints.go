@@ -3,7 +3,7 @@ package handlers
 import (
 	"github.com/gofiber/fiber/v2"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/repository/local"
-	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/utils"
+	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/utils/jwt"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/validator"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
@@ -11,17 +11,17 @@ import (
 
 // AppConfig contains the JWT secret and other global configurations
 type AppConfig struct {
-	JWTSecret []byte
+	JWTSecret []byte // JWT secret used for signing tokens
 }
 
 type Auth struct {
-	log      *zap.Logger
-	repo     local.Repository
-	validate validator.Validate
-	config   *AppConfig
+	log      *zap.Logger        // Logger for logging events
+	repo     local.Repository   // Repository interface for database operations
+	validate validator.Validate // Validator for input validation
+	config   *AppConfig         // Application configuration, including JWT secret
 }
 
-// NewAuth is the constructor for the auth handler. It initializes dependencies (logger, repo, validator, config)
+// NewAuth initializes a new Auth handler with its dependencies.
 func NewAuth(log *zap.Logger, repo local.Repository, validate validator.Validate, config *AppConfig) Handler {
 	return &Auth{
 		log:      log,
@@ -31,13 +31,18 @@ func NewAuth(log *zap.Logger, repo local.Repository, validate validator.Validate
 	}
 }
 
-// AssignEndpoints assigns routes for login, logout, and refresh to the Fiber router.
+// AssignEndpoints sets up the routes for login, logout, and token refresh.
 func (handler *Auth) AssignEndpoints(prefix string, router fiber.Router) {
 	r := router.Group(prefix)
 
-	r.Post("login", handler.loginEndpoint)
-	r.Post("logout", handler.logoutEndpoint)
-	r.Post("refresh", handler.refreshTokenEndpoint)
+	// Route for user login
+	r.Post("login", handler.loginEndpoint) // POST /auth/login: Authenticates user and returns tokens.
+
+	// Route for user logout
+	r.Post("logout", handler.logoutEndpoint) // POST /auth/logout: Logs the user out by invalidating their refresh token.
+
+	// Route for refreshing tokens
+	r.Post("refresh", handler.refreshTokenEndpoint) // POST /auth/refresh: Generates new access and refresh tokens.
 }
 
 // loginEndpoint handles the login process by validating the user, checking credentials, and generating tokens.
@@ -46,8 +51,8 @@ func (handler *Auth) loginEndpoint(ctx *fiber.Ctx) error {
 
 	// Struct for parsing login request body
 	type loginRequest struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Email    string `json:"email"`    // User's email address
+		Password string `json:"password"` // User's password
 	}
 	var req loginRequest
 
@@ -73,7 +78,7 @@ func (handler *Auth) loginEndpoint(ctx *fiber.Ctx) error {
 	// Compare the provided password with the hashed password from the database
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 		handler.log.Error("invalid password", zap.Error(err))
-		return &fiber.Error{Code: fiber.StatusUnauthorized, Message: "invalid username or password"}
+		return &fiber.Error{Code: fiber.StatusUnauthorized, Message: "invalid username or password"} // Return 401 Unauthorized if password is incorrect
 	}
 
 	// Delete any previous refresh token before issuing a new one
@@ -86,7 +91,7 @@ func (handler *Auth) loginEndpoint(ctx *fiber.Ctx) error {
 	}
 
 	// Generate access and refresh tokens using the JWT secret from the AppConfig
-	accessToken, refreshToken, err := utils.GenerateTokens(user.ID, user.Username, user.Role, handler.config.JWTSecret)
+	accessToken, refreshToken, err := jwt.GenerateTokens(user.ID, user.Username, user.Role, handler.config.JWTSecret)
 	if err != nil {
 		handler.log.Error("failed to generate tokens", zap.Error(err))
 		return fiber.ErrInternalServerError // Return 500 if token generation fails
@@ -101,16 +106,17 @@ func (handler *Auth) loginEndpoint(ctx *fiber.Ctx) error {
 
 	// Respond with access token, refresh token, and user details
 	return ctx.JSON(fiber.Map{
-		"access_token":  accessToken,
-		"refresh_token": refreshToken,
-		"user":          utils.ToResponseUser(user),
+		"access_token":  accessToken,          // JWT access token for authentication
+		"refresh_token": refreshToken,         // JWT refresh token for obtaining new access tokens
+		"user":          ToResponseUser(user), // User details
 	})
 }
 
+// logoutEndpoint handles user logout operations.
 func (handler *Auth) logoutEndpoint(ctx *fiber.Ctx) error {
 	// Parse request body to get the token
 	type logoutRequest struct {
-		Token string `json:"token"`
+		Token string `json:"token"` // Refresh token to be invalidated
 	}
 
 	var req logoutRequest
@@ -140,10 +146,11 @@ func (handler *Auth) logoutEndpoint(ctx *fiber.Ctx) error {
 
 	// Success response
 	return ctx.JSON(fiber.Map{
-		"message": "Logged out successfully",
+		"message": "Logged out successfully", // Successful logout message
 	})
 }
 
+// refreshTokenEndpoint creates new access and refresh tokens using the current refresh token.
 func (handler *Auth) refreshTokenEndpoint(ctx *fiber.Ctx) error {
 	type refreshRequest struct {
 		Identifier   string `json:"identifier"`    // Can be username or email
@@ -162,7 +169,7 @@ func (handler *Auth) refreshTokenEndpoint(ctx *fiber.Ctx) error {
 	}
 
 	// Verify if the refresh token has expired
-	if utils.IsExpired(req.RefreshToken, handler.config.JWTSecret) {
+	if jwt.IsExpired(req.RefreshToken, handler.config.JWTSecret) {
 		return fiber.ErrUnauthorized // 401 - Unauthorized if the token has expired
 	}
 
@@ -186,7 +193,7 @@ func (handler *Auth) refreshTokenEndpoint(ctx *fiber.Ctx) error {
 	}
 
 	// Generate new access and refresh tokens using the JWT secret from the AppConfig
-	accessToken, refreshToken, err := utils.GenerateTokens(user.ID, user.Username, user.Role, handler.config.JWTSecret)
+	accessToken, refreshToken, err := jwt.GenerateTokens(user.ID, user.Username, user.Role, handler.config.JWTSecret)
 	if err != nil {
 		handler.log.Error("Failed to generate tokens", zap.Error(err))
 		return fiber.ErrInternalServerError // 500 - Internal server error if token generation fails
@@ -199,9 +206,9 @@ func (handler *Auth) refreshTokenEndpoint(ctx *fiber.Ctx) error {
 	}
 
 	// Use the ToCreateUserResponse function to generate the response
-	response := utils.ToCreateUserResponse(user, accessToken, refreshToken)
+	response := ToCreateUserResponse(user, accessToken, refreshToken)
 
 	// Respond with the structured response
 	handler.log.Info("Successfully created new token", zap.String("user", req.Identifier))
-	return ctx.Status(fiber.StatusOK).JSON(response)
+	return ctx.Status(fiber.StatusOK).JSON(response) // Return successful response with new tokens
 }

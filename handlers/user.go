@@ -7,6 +7,7 @@ import (
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/repository/local"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/services"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/utils"
+	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/utils/jwt"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/validator"
 	"go.uber.org/zap"
 	"net/http"
@@ -20,6 +21,7 @@ type user struct {
 	config      *AppConfig
 }
 
+// NewUser initializes a new user handler with dependencies.
 func NewUser(log *zap.Logger, repo local.Repository, validate validator.Validate, config *AppConfig, userService services.UserService) Handler {
 	return &user{
 		log:         log,
@@ -32,21 +34,22 @@ func NewUser(log *zap.Logger, repo local.Repository, validate validator.Validate
 
 // AssignEndpoints sets up the routes for the user-related operations.
 func (handler *user) AssignEndpoints(prefix string, router fiber.Router) {
-
 	r := router.Group(prefix)
 
 	// Route for user creation, no JWT middleware here
-	r.Post("create", handler.createEndpoint)
-	r.Get("/search", handler.findByEmailEndpoint)
-	r.Get(":id", handler.getEndpoint)
-	r.Get("/", handler.getAllEndpoint)
+	r.Post("create", handler.createEndpoint) // POST /user/create: Creates a new user and returns JWT tokens.
+
+	// Routes that don't require authentication
+	r.Get("/search", handler.findByEmailEndpoint) // GET /user/search: Searches for a user by email.
+	r.Get(":id", handler.getEndpoint)             // GET /user/:id: Retrieves user information by ID.
+	r.Get("/", handler.getAllEndpoint)            // GET /user: Retrieves a list of all users.
 
 	// Routes that require JWT authentication
 	protectedRoutes := r.Group("/", middleware.JWTAuthMiddleware)
 
 	// These routes require the user to be authenticated (JWT)
-	protectedRoutes.Patch("update/:id", handler.updateEndpoint)
-	protectedRoutes.Delete("/:id", handler.deleteEndpoint)
+	protectedRoutes.Patch("update/:id", handler.updateEndpoint) // PATCH /user/update/:id: Updates user information.
+	protectedRoutes.Delete("/:id", handler.deleteEndpoint)      // DELETE /user/:id: Deletes a user by ID.
 }
 
 // createEndpoint handles user creation and returns JWT tokens upon success.
@@ -97,7 +100,7 @@ func (handler *user) createEndpoint(c *fiber.Ctx) error {
 	}
 
 	// Create JWT token with user ID, username, and role.
-	accessToken, refreshToken, err := utils.GenerateTokens(user.ID, user.Username, user.Role, handler.config.JWTSecret)
+	accessToken, refreshToken, err := jwt.GenerateTokens(user.ID, user.Username, user.Role, handler.config.JWTSecret)
 	if err != nil {
 		handler.log.Error("Failed to generate tokens", zap.Error(err))
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to generate tokens")
@@ -110,7 +113,7 @@ func (handler *user) createEndpoint(c *fiber.Ctx) error {
 	}
 
 	// Use the utility function to generate the response
-	response := utils.ToCreateUserResponse(user, accessToken, refreshToken)
+	response := ToCreateUserResponse(user, accessToken, refreshToken)
 
 	handler.log.Info("User created successfully", zap.String("userID", user.ID))
 	return c.Status(fiber.StatusCreated).JSON(response)
@@ -135,7 +138,7 @@ func (handler *user) getEndpoint(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "User data is incomplete"})
 	}
 
-	userResponse := utils.ToResponseUser(user)
+	userResponse := ToResponseUser(user)
 
 	handler.log.Info("User found:", zap.String("username", user.Username), zap.String("email", user.Email))
 
@@ -159,7 +162,7 @@ func (handler *user) getAllEndpoint(c *fiber.Ctx) error {
 
 	userResponses := make([]model.UserResponse, len(users))
 	for i, user := range users {
-		userResponses[i] = utils.ToResponseUser(user)
+		userResponses[i] = ToResponseUser(user)
 	}
 
 	handler.log.Info("All users fetched successfully")
@@ -250,42 +253,6 @@ func (handler *user) deleteEndpoint(c *fiber.Ctx) error {
 	})
 }
 
-/*
-// findByEmailEndpoint allows searching for a user by email.
-func (handler *user) findByEmailEndpoint(c *fiber.Ctx) error {
-	// Take query parameters from email
-	email := c.Query("email")
-
-	// Email parameter control
-	if email == "" {
-		handler.log.Error("Email query parameter is missing")
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Email query parameter is required"})
-	}
-
-	if err := handler.validate.ValidateEmail(email); err != nil {
-		handler.log.Error("Error validating email", zap.String("email", email), zap.Error(err))
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid email format"})
-	}
-
-	// Verifying the mail receive with logging
-	handler.log.Info("Searching for user with email:", zap.String("email", email))
-
-	// Search the user in the database via email
-	user, err := handler.repo.FindOneByEmail(email)
-	if err != nil {
-		handler.log.Error("User not found by email", zap.String("email", email), zap.Error(err))
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
-	}
-
-	// User found response message with JSON
-	userResponse := utils.ToResponseUser(user)
-
-	handler.log.Info("User found by email", zap.String("email", email))
-	return c.Status(fiber.StatusOK).JSON(userResponse)
-}
-
-*/
-
 // findByEmailEndpoint allows searching for a user by email.
 func (handler *user) findByEmailEndpoint(c *fiber.Ctx) error {
 	// Get query parameter for email
@@ -314,7 +281,7 @@ func (handler *user) findByEmailEndpoint(c *fiber.Ctx) error {
 	}
 
 	// User found, create response
-	userResponse := utils.ToResponseUser(user)
+	userResponse := ToResponseUser(user)
 
 	handler.log.Info("User found by email", zap.String("email", email))
 	return c.Status(fiber.StatusOK).JSON(userResponse)

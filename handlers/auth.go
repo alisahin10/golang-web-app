@@ -4,7 +4,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/model"
-	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/utils"
+	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/utils/jwt"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -47,7 +47,7 @@ func (auth *Auth) login(ctx *fiber.Ctx) error {
 	}
 
 	// Generate tokens with JWT secret
-	accessToken, refreshToken, err := utils.GenerateTokens(user.ID, user.Username, user.Role, auth.config.JWTSecret)
+	accessToken, refreshToken, err := jwt.GenerateTokens(user.ID, user.Username, user.Role, auth.config.JWTSecret)
 	if err != nil {
 		auth.log.Error("Generate access token failed", zap.Error(err))
 		return fiber.ErrInternalServerError // Return InternalServerError on token generation failure
@@ -63,7 +63,7 @@ func (auth *Auth) login(ctx *fiber.Ctx) error {
 	return ctx.JSON(fiber.Map{
 		"access_token":  accessToken,
 		"refresh_token": refreshToken,
-		"user":          utils.ToResponseUser(user), // Response with user information
+		"user":          ToResponseUser(user), // Response with user information
 	})
 }
 
@@ -120,7 +120,7 @@ func (auth *Auth) refreshToken(ctx *fiber.Ctx) error {
 		return fiber.ErrBadRequest
 	}
 	// Check if the refresh token has expired using JWT secret
-	if utils.IsExpired(req.RefreshToken, auth.config.JWTSecret) {
+	if jwt.IsExpired(req.RefreshToken, auth.config.JWTSecret) {
 		return fiber.ErrBadRequest // Return BadRequest if expired
 	}
 	// Find user ID using refresh token
@@ -140,7 +140,7 @@ func (auth *Auth) refreshToken(ctx *fiber.Ctx) error {
 		auth.log.Error("Delete refresh token failed", zap.Error(err))
 	}
 	// Generate new tokens with JWT secret
-	accessToken, refreshToken, err := utils.GenerateTokens(user.ID, user.Username, user.Role, auth.config.JWTSecret)
+	accessToken, refreshToken, err := jwt.GenerateTokens(user.ID, user.Username, user.Role, auth.config.JWTSecret)
 	if err != nil {
 		auth.log.Error("Generate access token failed", zap.Error(err))
 		return fiber.ErrInternalServerError // Return InternalServerError on token generation failure
@@ -151,7 +151,7 @@ func (auth *Auth) refreshToken(ctx *fiber.Ctx) error {
 		return fiber.ErrInternalServerError // Return InternalServerError on new refresh token save failure
 	}
 	// Create successful response
-	response := utils.ToCreateUserResponse(user, accessToken, refreshToken)
+	response := ToCreateUserResponse(user, accessToken, refreshToken)
 	auth.log.Info("Successfully created new token", zap.String("user", req.Identifier))
 	return ctx.Status(fiber.StatusOK).JSON(response) // Return successful response with new tokens
 }

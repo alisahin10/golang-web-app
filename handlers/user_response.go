@@ -1,4 +1,4 @@
-package utils
+package handlers
 
 import (
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/model"
