@@ -11,7 +11,6 @@ import (
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/utils/password"
 	"gitlab.com/rapsodoinc/tr/architecture/golang-web-app/validator"
 	"go.uber.org/zap"
-	"net/http"
 )
 
 type user struct {
@@ -20,16 +19,18 @@ type user struct {
 	validate    validator.Validate
 	userService services.UserService
 	config      *AppConfig
+	errors      middleware.AppError
 }
 
 // NewUser initializes a new user handler with dependencies.
-func NewUser(log *zap.Logger, repo local.Repository, validate validator.Validate, config *AppConfig, userService services.UserService) Handler {
+func NewUser(log *zap.Logger, repo local.Repository, validate validator.Validate, config *AppConfig, userService services.UserService, errors middleware.AppError) Handler {
 	return &user{
 		log:         log,
 		repo:        repo,
 		validate:    validate,
 		config:      config,
 		userService: userService,
+		errors:      errors,
 	}
 }
 
@@ -63,31 +64,32 @@ func (handler *user) createEndpoint(c *fiber.Ctx) error {
 	// Parse JSON body into user model
 	if err := c.BodyParser(user); err != nil {
 		handler.log.Error("Error parsing body", zap.Error(err))
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+		return handler.errors.NewBadRequest("İnvalid request body")
 	}
 
 	// Validate the user data using the ValidateUser method from the validator
 	isValid, validationErr := handler.validate.ValidateUser(user)
 	if !isValid {
 		handler.log.Error("Validation error", zap.String("error", validationErr))
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": validationErr})
+		return handler.errors.NewBadRequest("Validation error")
+
 	}
 
 	// Check if email is already taken using the UserService
 	emailTaken, err := handler.userService.IsEmailTaken(user.Email)
 	if err != nil {
 		handler.log.Error("Error checking email", zap.Error(err))
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not check email"})
+		return handler.errors.NewInternalServerError("Error checking email")
 	}
 	if emailTaken {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Email is already taken"})
+		return handler.errors.NewBadRequest("Email is taken")
 	}
 
 	// Hash the user's password.
 	hashedPassword, err := password.HashPassword(user.Password)
 	if err != nil {
 		handler.log.Error("Failed to hash password", zap.Error(err))
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to hash password")
+		return handler.errors.NewInternalServerError("Failed to hash password")
 	}
 	user.Password = hashedPassword
 
@@ -100,20 +102,20 @@ func (handler *user) createEndpoint(c *fiber.Ctx) error {
 	// Use the repository to create a new user
 	if err := handler.repo.Create(user); err != nil {
 		handler.log.Error("Error creating user", zap.Error(err))
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "could not create user"})
+		return handler.errors.NewInternalServerError("Could not create user")
 	}
 
 	// Create JWT token with user ID, username, and role.
 	accessToken, refreshToken, err := jwt.GenerateTokens(user.ID, user.Username, user.Role, handler.config.JWTSecret)
 	if err != nil {
 		handler.log.Error("Failed to generate tokens", zap.Error(err))
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to generate tokens")
+		return handler.errors.NewInternalServerError("Failed to generate tokens")
 	}
 
 	// Save the refresh token in the database
 	if err := handler.repo.SaveRefreshToken(user.ID, refreshToken); err != nil {
 		handler.log.Error("Failed to save refresh token", zap.Error(err))
-		return fiber.NewError(fiber.StatusInternalServerError, "Failed to save refresh token")
+		return handler.errors.NewInternalServerError("Failed to save refresh token")
 	}
 
 	// Use the utility function to generate the response
@@ -133,13 +135,13 @@ func (handler *user) getEndpoint(c *fiber.Ctx) error {
 	user, err := handler.repo.FindOneByID(userID)
 	if err != nil {
 		handler.log.Error("User not found in database", zap.Error(err))
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+		return handler.errors.NewNotFound("User not found")
 	}
 
 	// Check if user fields are populated
 	if user.Name == "" || user.Email == "" {
 		handler.log.Error("User found but fields are empty", zap.String("userID", userID))
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "User data is incomplete"})
+		return handler.errors.NewInternalServerError("User found but fields are empty")
 	}
 
 	userResponse := ToResponseUser(user)
@@ -155,7 +157,7 @@ func (handler *user) getAllEndpoint(c *fiber.Ctx) error {
 	users, err := handler.repo.FindAll()
 	if err != nil {
 		handler.log.Error("Error fetching users from database", zap.Error(err))
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not fetch users"})
+		return handler.errors.NewInternalServerError("Could not fetch users from database")
 	}
 
 	// If there is no user then empty slice returned
@@ -185,9 +187,8 @@ func (handler *user) updateEndpoint(c *fiber.Ctx) error {
 	// Checking if the user is authorized to update only their own data.
 	if tokenUserID != userID {
 		// If the user tries to update someone else's data, return an unauthorized response.
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "You are not authorized to update this user",
-		})
+		return handler.errors.NewUnauthorized("You are not authorized to update this user")
+
 	}
 
 	// Parsing the update data from the request body.
@@ -195,7 +196,7 @@ func (handler *user) updateEndpoint(c *fiber.Ctx) error {
 	if err := c.BodyParser(updateData); err != nil {
 		// If the request body is invalid, return a bad request response.
 		handler.log.Error("Error parsing update data", zap.Error(err))
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+		return handler.errors.NewBadRequest("Error parsing update data")
 	}
 
 	// Attempting to update the user's data in the database.
@@ -203,7 +204,7 @@ func (handler *user) updateEndpoint(c *fiber.Ctx) error {
 	if err != nil {
 		// If the update operation fails, return an internal server error response.
 		handler.log.Error("Error updating user", zap.Error(err))
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not update user"})
+		return handler.errors.NewInternalServerError("Error updating user")
 	}
 
 	// Logging the success of the update operation.
@@ -227,9 +228,7 @@ func (handler *user) deleteEndpoint(c *fiber.Ctx) error {
 	// Checking if the user is authorized to delete only their own data.
 	if tokenUserID != userID {
 		// If the user tries to delete someone else's data, return an unauthorized response.
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "You are not authorized to delete this user",
-		})
+		return handler.errors.NewUnauthorized("You are not authorized to delete this user")
 	}
 
 	// Checking if the user exists in the database before attempting to delete.
@@ -237,14 +236,14 @@ func (handler *user) deleteEndpoint(c *fiber.Ctx) error {
 	if err != nil {
 		// If the user is not found, return a not found response.
 		handler.log.Error("User not found", zap.Error(err))
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+		return handler.errors.NewNotFound("User not found")
 	}
 
 	// Deleting the user from the database.
 	if err := handler.repo.DeleteOneByID(userID); err != nil {
 		// If the delete operation fails, return an internal server error response.
 		handler.log.Error("Error deleting user", zap.Error(err))
-		return fiber.NewError(fiber.StatusInternalServerError, "Error deleting user")
+		return handler.errors.NewInternalServerError("Error deleting user")
 	}
 
 	// Logging the success of the delete operation.
@@ -265,13 +264,13 @@ func (handler *user) findByEmailEndpoint(c *fiber.Ctx) error {
 	// Email parameter control
 	if email == "" {
 		handler.log.Error("Email query parameter is missing")
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Email query parameter is required"})
+		return handler.errors.NewBadRequest("Email query parameter is missing")
 	}
 
 	// Validate email format using the validator
 	if !handler.validate.ValidateEmailFormat(email) {
 		handler.log.Error("Invalid email format", zap.String("email", email))
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid email format"})
+		return handler.errors.NewBadRequest("Invalid email format")
 	}
 
 	// Verifying the email through logging
@@ -281,7 +280,7 @@ func (handler *user) findByEmailEndpoint(c *fiber.Ctx) error {
 	user, err := handler.userService.FindByEmail(email)
 	if err != nil {
 		handler.log.Error("User not found by email", zap.String("email", email), zap.Error(err))
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+		return handler.errors.NewNotFound("User not found")
 	}
 
 	// User found, create response
