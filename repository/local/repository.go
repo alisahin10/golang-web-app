@@ -15,4 +15,5 @@ type Repository interface {
 	SaveRefreshToken(UserID string, refreshToken string) error
 	FindRefreshToken(UserID string) (string, error)
 	DeleteRefreshToken(userID string) error
+	Close() error
 }

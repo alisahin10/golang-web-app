@@ -10,6 +10,7 @@ import (
 type Validate interface {
 	Struct(s interface{}) error
 	ValidateUser(user *model.User) (bool, string)
+	ValidateEmail(email string) error // Yeni email doğrulama fonksiyonu
 }
 
 type validatorImpl struct {
@@ -74,4 +75,13 @@ func (v *validatorImpl) ValidateUser(user *model.User) (bool, string) {
 	}
 
 	return true, ""
+}
+
+// Email validation function
+func (v *validatorImpl) ValidateEmail(email string) error {
+	// Verifying the email format
+	if err := v.v.Var(email, "required,email,email_format"); err != nil {
+		return err
+	}
+	return nil
 }

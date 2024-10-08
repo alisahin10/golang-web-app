@@ -9,29 +9,35 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// AppConfig contains the JWT secret and other global configurations
+type AppConfig struct {
+	JWTSecret []byte
+}
+
 type Auth struct {
 	log      *zap.Logger
 	repo     local.Repository
 	validate validator.Validate
+	config   *AppConfig
 }
 
-// NewAuth is the constructor for the auth handler. It initializes dependencies (logger, repo, validator)
-func NewAuth(log *zap.Logger, repo local.Repository, validate validator.Validate) Handler {
+// NewAuth is the constructor for the auth handler. It initializes dependencies (logger, repo, validator, config)
+func NewAuth(log *zap.Logger, repo local.Repository, validate validator.Validate, config *AppConfig) Handler {
 	return &Auth{
 		log:      log,
 		repo:     repo,
 		validate: validate,
+		config:   config,
 	}
 }
 
-// AssignEndpoints assigns routes for login and logout to the Fiber router.
+// AssignEndpoints assigns routes for login, logout, and refresh to the Fiber router.
 func (handler *Auth) AssignEndpoints(prefix string, router fiber.Router) {
 	r := router.Group(prefix)
 
 	r.Post("login", handler.loginEndpoint)
 	r.Post("logout", handler.logoutEndpoint)
 	r.Post("refresh", handler.refreshTokenEndpoint)
-
 }
 
 // loginEndpoint handles the login process by validating the user, checking credentials, and generating tokens.
@@ -67,12 +73,11 @@ func (handler *Auth) loginEndpoint(ctx *fiber.Ctx) error {
 	// Compare the provided password with the hashed password from the database
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 		handler.log.Error("invalid password", zap.Error(err))
-		return fiber.ErrUnauthorized // Change to Unauthorized (401) instead of Internal Server Error (500)
+		return &fiber.Error{Code: fiber.StatusUnauthorized, Message: "invalid username or password"}
 	}
 
 	// Delete any previous refresh token before issuing a new one
 	if err := handler.repo.DeleteRefreshToken(user.ID); err != nil {
-		// If error is "not found" then skip the logging
 		if err.Error() == "not found" {
 			handler.log.Info("No previous refresh token found", zap.String("userID", user.ID))
 		} else {
@@ -80,8 +85,8 @@ func (handler *Auth) loginEndpoint(ctx *fiber.Ctx) error {
 		}
 	}
 
-	// Generate access and refresh tokens
-	accessToken, refreshToken, err := utils.GenerateTokens(user.Username, user.Email)
+	// Generate access and refresh tokens using the JWT secret from the AppConfig
+	accessToken, refreshToken, err := utils.GenerateTokens(user.ID, user.Username, user.Role, handler.config.JWTSecret)
 	if err != nil {
 		handler.log.Error("failed to generate tokens", zap.Error(err))
 		return fiber.ErrInternalServerError // Return 500 if token generation fails
@@ -100,7 +105,6 @@ func (handler *Auth) loginEndpoint(ctx *fiber.Ctx) error {
 		"refresh_token": refreshToken,
 		"user":          utils.ToResponseUser(user),
 	})
-
 }
 
 func (handler *Auth) logoutEndpoint(ctx *fiber.Ctx) error {
@@ -158,7 +162,7 @@ func (handler *Auth) refreshTokenEndpoint(ctx *fiber.Ctx) error {
 	}
 
 	// Verify if the refresh token has expired
-	if utils.IsExpired(req.RefreshToken) {
+	if utils.IsExpired(req.RefreshToken, handler.config.JWTSecret) {
 		return fiber.ErrUnauthorized // 401 - Unauthorized if the token has expired
 	}
 
@@ -181,14 +185,14 @@ func (handler *Auth) refreshTokenEndpoint(ctx *fiber.Ctx) error {
 		handler.log.Error("Failed to delete previous refresh token", zap.Error(err))
 	}
 
-	// Generate new access and refresh tokens
-	accessToken, refreshToken, err := utils.GenerateTokens(user.Username, user.Email)
+	// Generate new access and refresh tokens using the JWT secret from the AppConfig
+	accessToken, refreshToken, err := utils.GenerateTokens(user.ID, user.Username, user.Role, handler.config.JWTSecret)
 	if err != nil {
 		handler.log.Error("Failed to generate tokens", zap.Error(err))
 		return fiber.ErrInternalServerError // 500 - Internal server error if token generation fails
 	}
 
-	// Optionally, save the new refresh token in the database
+	// Save the new refresh token in the database
 	if err := handler.repo.SaveRefreshToken(user.ID, refreshToken); err != nil {
 		handler.log.Error("Failed to save new refresh token", zap.Error(err))
 		return fiber.ErrInternalServerError // 500 - Internal server error if saving refresh token fails

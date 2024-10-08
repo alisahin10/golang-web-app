@@ -8,6 +8,7 @@ type User struct {
 	Name     string `json:"name"`
 	Lastname string `json:"lastname"`
 	Age      int    `json:"age"`
+	Role     string `json:"role"`
 }
 
 type UserResponse struct {

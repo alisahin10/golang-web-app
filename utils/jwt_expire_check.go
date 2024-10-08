@@ -6,10 +6,10 @@ import (
 )
 
 // IsExpired checks whether a given JWT token has expired.
-func IsExpired(tokenStr string) bool {
+func IsExpired(tokenStr string, jwtSecret []byte) bool {
 	// Parse the token using the JWT secret
 	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
-		return jwtSecret, nil // Use the same secret
+		return jwtSecret, nil // Use the secret passed as a parameter
 	})
 
 	// If there's an error or token is invalid, assume it's expired

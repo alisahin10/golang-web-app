@@ -46,8 +46,8 @@ func (auth *Auth) login(ctx *fiber.Ctx) error {
 		return fiber.ErrUnauthorized // Return Unauthorized if password is incorrect
 	}
 
-	// Generate tokens
-	accessToken, refreshToken, err := utils.GenerateTokens(user.Username, user.Email)
+	// Generate tokens with JWT secret
+	accessToken, refreshToken, err := utils.GenerateTokens(user.ID, user.Username, user.Role, auth.config.JWTSecret)
 	if err != nil {
 		auth.log.Error("Generate access token failed", zap.Error(err))
 		return fiber.ErrInternalServerError // Return InternalServerError on token generation failure
@@ -119,8 +119,8 @@ func (auth *Auth) refreshToken(ctx *fiber.Ctx) error {
 	if req.Identifier == "" || req.RefreshToken == "" {
 		return fiber.ErrBadRequest
 	}
-	// Check if the refresh token has expired
-	if utils.IsExpired(req.RefreshToken) {
+	// Check if the refresh token has expired using JWT secret
+	if utils.IsExpired(req.RefreshToken, auth.config.JWTSecret) {
 		return fiber.ErrBadRequest // Return BadRequest if expired
 	}
 	// Find user ID using refresh token
@@ -139,8 +139,8 @@ func (auth *Auth) refreshToken(ctx *fiber.Ctx) error {
 	if err := auth.repo.DeleteRefreshToken(user.ID); err != nil {
 		auth.log.Error("Delete refresh token failed", zap.Error(err))
 	}
-	// Generate new tokens
-	accessToken, refreshToken, err := utils.GenerateTokens(user.Username, user.Email)
+	// Generate new tokens with JWT secret
+	accessToken, refreshToken, err := utils.GenerateTokens(user.ID, user.Username, user.Role, auth.config.JWTSecret)
 	if err != nil {
 		auth.log.Error("Generate access token failed", zap.Error(err))
 		return fiber.ErrInternalServerError // Return InternalServerError on token generation failure
