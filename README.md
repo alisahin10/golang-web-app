@@ -1,136 +1,197 @@
-
 # Golang Web Application
+This project is a web application built with Golang using the GoFiber framework. It includes user management and authentication (auth) modules. The primary focus of this application is user registration, authentication (with JWT tokens), and managing user profiles. User data is stored in a local .db file using the Tidwall/buntdb library, which is a lightweight and embeddable key/value store.
 
-This project is a Golang HTTP server built using the GoFiber framework. The main goal is to implement `auth` and `user` modules. The entities within these modules should be stored in a local `.db` file using the `tidwall/buntdb` library.
+## Features
+User registration with validation.
+User login with JWT token-based authentication.
+Profile management (get and update user information).
+Email-based user search.
+JWT-based access and refresh tokens.
+Local database storage using Tidwall/buntdb.
 
-## Validation
-All request bodies or parameters must be validated using a validator. The validation rules are up to the developer's discretion.
+## Technologies Used
+GoFiber: Web framework for building fast and scalable web applications.
+BuntDB: An embeddable, in-memory key/value store with support for persistency.
+JWT (JSON Web Tokens): For user authentication and session management.
+SHA256: For password hashing.
+Fiber middleware: For error handling, logging, and routing.
 
-## Code Structure
-All features and package utilization should be encapsulated and use abstraction to separate business logic.
+## Project Structure
+![image](https://github.com/user-attachments/assets/3f5bae63-0416-4975-97d4-b0eda4c30d6a)
 
-## Auth Module
-The `auth` module will handle all endpoints related to user authentication. It will use JWT tokens for user authentication. The encryption method to be used is `SHA256` with a TTL of 10 minutes. Additionally, a refresh token mechanism must be implemented to issue new access tokens if the current token expires. When the JWT token expires, a new `AccessToken` and `RefreshToken` should be issued using the refresh token.
+## Requirements
+Go version 1.17 or higher
+Git
+A local .env file to specify the environment variables (e.g., LOCAL_DB_PATH).
 
-### Endpoints
+## Installation and Setup
+Clone the Repository:
+```
+git clone https://github.com/alisahin10/Golang-Web-App
+cd golang-web-app
 
-#### 1. Register [POST] `/auth/register`
-Registers a new user with the following request parameters:
+```
 
-**Request**:
-```json
+
+
+Install Dependencies: Run the following command to install the necessary Go dependencies:
+```
+go mod tidy
+```
+
+Configure the .env file: Create a .env file in the root directory and configure the environment variables:
+```
+LOCAL_DB_PATH=./data/buntdb.db
+```
+
+Run the Application: Start the application with:
+```
+go run main.go
+```
+
+## Endpoints
+### 1. Auth Module (/auth)
+Handles all endpoints related to user authentication and token management. It uses JWT tokens for access and refresh token mechanisms.
+
+**Register [POST] /auth/register
+Registers a new user.**
+
+Request Body:
+```
 {
-  "username": "<username of the user>",
-  "email": "<email of the user>",
-  "password": "<password of the user>",
-  "name": "<name of the user>",
-  "lastname": "<lastname of the user>"
+  "username": "string",
+  "email": "string",
+  "password": "string",
+  "name": "string",
+  "lastname": "string"
+}
+
+```
+Response Body:
+```
+{
+  "username": "string",
+  "email": "string",
+  "name": "string",
+  "lastname": "string",
+  "access_token": "string (10 min TTL)",
+  "refresh_token": "string"
 }
 ```
 
-**Response**:
-```json
+**Login [POST] /auth/login
+Authenticates a user and provides access and refresh tokens.**
+
+Request Body:
+```
 {
-  "username": "<username of the user>",
-  "email": "<email of the user>",
-  "name": "<name of the user>",
-  "lastname": "<lastname of the user>",
-  "access_token": "<access token of the user (10 min TTL)>",
-  "refresh_token": "<refresh token of the user>"
+  "identifier": "string (username or email)",
+  "password": "string"
+}
+
+```
+Response Body:
+```
+{
+  "username": "string",
+  "email": "string",
+  "name": "string",
+  "lastname": "string",
+  "access_token": "string (10 min TTL)",
+  "refresh_token": "string"
+}
+
+```
+**Logout [POST] /auth/logout
+Logs out the user and invalidates the refresh token.**
+
+**Request Header:** Authorization: Bearer <access_token>
+
+**Refresh [POST] /auth/refresh
+Issues a new access token and refresh token using the refresh token.**
+
+Request Body:
+```
+{
+  "identifier": "string (username or email)",
+  "password": "string"
+}
+
+```
+Response Body:
+```
+{
+  "username": "string",
+  "email": "string",
+  "name": "string",
+  "lastname": "string",
+  "access_token": "string (10 min TTL)",
+  "refresh_token": "string"
 }
 ```
 
-#### 2. Login [POST] `/auth/login`
-Authenticates a user using their `username` or `email` along with the password.
+### 2. User Module (/user)
+Handles user profile management including getting user profiles, updating user information, and deleting users.
 
-**Request**:
-```json
+**Get User Profile [GET] /user/:id
+Retrieves the details of a specific user by their ID.**
+Response Body:
+```
 {
-  "identifier": "<username or email of the user>",
-  "password": "<password of the user>"
+  "id": "string",
+  "username": "string",
+  "email": "string",
+  "name": "string",
+  "lastname": "string",
+  "age": "integer"
+}
+
+
+```
+**Update User Profile [PATCH] /user/:id
+Updates the user's profile details.**
+Request Body:
+```
+{
+  "email": "string",
+  "name": "string",
+  "lastname": "string",
+  "age": "integer"
+}
+
+
+```
+Response Body:
+```
+{
+  "message": "User updated successfully"
 }
 ```
-
-**Response**:
-```json
+**Delete User [DELETE] /user/:id
+Deletes a specific user by their ID.**
+Response Body:
+```
 {
-  "username": "<username of the user>",
-  "email": "<email of the user>",
-  "name": "<name of the user>",
-  "lastname": "<lastname of the user>",
-  "access_token": "<access token of the user (10 min TTL)>",
-  "refresh_token": "<refresh token of the user>"
+  "message": "User deleted successfully"
 }
 ```
+**Search User by Email [GET] /user/search
+Searches for a user by their email address.**
 
-#### 3. Logout [POST] `/auth/logout`
-Logs out the user and deletes the refresh token associated with the session.
-
-**Request**:
-- The access token is sent in the header for user identification.
-
-#### 4. Refresh [POST] `/auth/refresh`
-Issues a new `AccessToken` and `RefreshToken` using the refresh token.
-
-**Request**:
-```json
+Request Body:
+```
 {
-  "identifier": "<identifier of the user [email or username]>",
-  "refresh_token": "<refresh token of the user>"
+  "email": "string"
 }
 ```
-
-**Response**:
-```json
+Response Body:
+```
 {
-  "username": "<username of the user>",
-  "email": "<email of the user>",
-  "name": "<name of the user>",
-  "lastname": "<lastname of the user>",
-  "access_token": "<access token of the user (10 min TTL)>",
-  "refresh_token": "<refresh token of the user>"
+  "id": "string",
+  "username": "string",
+  "email": "string",
+  "name": "string",
+  "lastname": "string",
+  "age": "integer"
 }
 ```
-
-## User Module
-
-### Endpoints
-
-#### 1. GetProfile [GET] `/user/profile`
-Retrieves the profile details of the user.
-
-**Response**:
-```json
-{
-  "username": "<username of the user>",
-  "timezone": "<location of the user e.g., Europe/Istanbul>",
-  "language": "<language of the user e.g., TR | EN>",
-  "sport_branches": ["<Sport branches of the user>", "This is an array"]
-}
-```
-
-#### 2. UpdateProfile [PATCH] `/user/profile`
-Updates the user's profile details. **Note:** This is a PATCH method, so the handler logic should fit the requirements of a PATCH operation.
-
-**Request**:
-```json
-{
-  "username": "<username of the user>",
-  "timezone": "<location of the user e.g., Europe/Istanbul>",
-  "language": "<language of the user e.g., TR | EN>",
-  "sport_branches": ["<Sport branches of the user>", "This is an array"]
-}
-```
-
-**Response**:
-```json
-{
-  "username": "<username of the user>",
-  "timezone": "<location of the user e.g., Europe/Istanbul>",
-  "language": "<language of the user e.g., TR | EN>",
-  "sport_branches": ["<Sport branches of the user>", "This is an array"]
-}
-```
-
-#### 3. Delete [DELETE] `/user`
-Deletes the current user from the local database.
