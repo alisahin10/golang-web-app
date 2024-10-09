@@ -47,9 +47,6 @@ func (handler *user) AssignEndpoints(prefix string, router fiber.Router) {
 	r.Get("/", handler.getAllEndpoint)            // GET /user: Retrieves a list of all users.
 
 	// Routes that require JWT authentication
-	//protectedRoutes := r.Group("/", middleware.JWTAuthMiddleware)
-
-	// Routes that require JWT authentication
 	protectedRoutes := r.Group("/", middleware.JWTAuthMiddleware(handler.config.JWTSecret))
 
 	// These routes require the user to be authenticated (JWT)
